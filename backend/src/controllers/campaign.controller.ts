@@ -1,495 +1,583 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { CreateCampaignSchema, UpdateCampaignSchema } from '../schemas';
+import { z } from 'zod';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 
 const prisma = new PrismaClient();
 
+const createCampaignSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
+  eventDate: z.string().datetime(),
+  location: z.string().max(100).optional(),
+  imageUrl: z.string().url().optional(),
+  externalUrl: z.string().url().optional(),
+  maxClaims: z.number().int().positive().optional(),
+  secretCode: z.string().min(4).max(50).optional(),
+  metadata: z.object({
+    attributes: z.array(z.object({
+      trait_type: z.string(),
+      value: z.string()
+    })).optional()
+  }).optional()
+});
+
 export class CampaignController {
-  /**
-   * Create new campaign
-   */
-  static async createCampaign(req: Request, res: Response) {
+  static async createCampaign(req: AuthenticatedRequest, res: Response) {
     try {
-      const validatedData = CreateCampaignSchema.parse(req.body);
-      const organizerId = req.organizer!.id;
+      const validatedData = createCampaignSchema.parse(req.body);
+      const organizerId = req.organizer?.id || req.user?.id;
 
-      // Check campaign limit based on tier
-      const existingCampaigns = await prisma.campaign.count({
-        where: { organizerId },
-      });
-
-      const tier = req.organizer!.tier;
-      const maxCampaigns = tier === 'free' ? 3 : tier === 'pro' ? 50 : 500;
-
-      if (existingCampaigns >= maxCampaigns) {
-        return res.status(400).json({
+      if (!organizerId) {
+        return res.status(401).json({
           success: false,
-          error: `Maximum campaigns reached for ${tier} tier (${maxCampaigns})`,
+          error: 'Authentication required'
         });
       }
-
+      
       const campaign = await prisma.campaign.create({
         data: {
           ...validatedData,
-          eventDate: new Date(validatedData.eventDate),
           organizerId,
-        },
-        include: {
-          organizer: {
-            select: {
-              name: true,
-              email: true,
-            },
-          },
-          _count: {
-            select: {
-              claims: true,
-            },
-          },
-        },
+          eventDate: new Date(validatedData.eventDate),
+          isActive: true
+        }
       });
-
-      console.log(`🎪 Campaign created: ${campaign.name} by ${req.organizer!.email}`);
 
       return res.status(201).json({
         success: true,
-        data: {
-          ...campaign,
-          message: 'Campaign created successfully',
-        },
+        data: campaign
       });
     } catch (error) {
-      console.error('❌ Create campaign error:', error);
-      
-      if (error instanceof Error && error.name === 'ZodError') {
+      if (error instanceof z.ZodError) {
         return res.status(400).json({
           success: false,
-          error: 'Validation failed',
-          details: error,
+          error: 'Validation error',
+          details: error.errors
         });
       }
 
+      console.error('Error creating campaign:', error);
       return res.status(500).json({
         success: false,
-        error: 'Failed to create campaign',
+        error: 'Failed to create campaign'
       });
     }
   }
 
-  /**
-   * List organizer's campaigns
-   */
-  static async listCampaigns(req: Request, res: Response) {
+  static async listCampaigns(req: AuthenticatedRequest, res: Response) {
     try {
-      const organizerId = req.organizer!.id;
-      const { page = 1, limit = 10, search, isActive } = req.query;
+      const organizerId = req.organizer?.id || req.user?.id;
 
-      const skip = (Number(page) - 1) * Number(limit);
-      const take = Number(limit);
+      if (!organizerId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
 
+      // Get query parameters
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const search = req.query.search as string;
+      const isActive = req.query.isActive === 'true' ? true : req.query.isActive === 'false' ? false : undefined;
+
+      // Build where clause
       const where: any = { organizerId };
-
+      
       if (search) {
         where.OR = [
-          { name: { contains: search as string, mode: 'insensitive' } },
-          { description: { contains: search as string, mode: 'insensitive' } },
+          { name: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+          { location: { contains: search, mode: 'insensitive' } }
         ];
       }
-
+      
       if (isActive !== undefined) {
-        where.isActive = isActive === 'true';
+        where.isActive = isActive;
       }
 
-      const [campaigns, total] = await Promise.all([
-        prisma.campaign.findMany({
-          where,
-          skip,
-          take,
-          include: {
-            _count: {
-              select: {
-                claims: true,
-              },
-            },
-          },
-          orderBy: { createdAt: 'desc' },
-        }),
-        prisma.campaign.count({ where }),
-      ]);
+      // Get total count for pagination
+      const total = await prisma.campaign.count({ where });
 
+      // Get campaigns with pagination
+      const campaigns = await prisma.campaign.findMany({
+        where,
+        include: {
+          _count: {
+            select: { claims: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit
+      });
+
+      // ✅ Fixed: Return campaigns in the expected format
       return res.json({
         success: true,
         data: {
-          campaigns,
+          campaigns, // Frontend expects data.campaigns
           pagination: {
-            page: Number(page),
-            limit: Number(limit),
+            page,
+            limit,
             total,
-            pages: Math.ceil(total / Number(limit)),
-          },
-        },
+            pages: Math.ceil(total / limit)
+          }
+        }
       });
     } catch (error) {
-      console.error('❌ List campaigns error:', error);
+      console.error('Error fetching campaigns:', error);
       return res.status(500).json({
         success: false,
-        error: 'Failed to list campaigns',
+        error: 'Failed to fetch campaigns'
       });
     }
   }
 
-  /**
-   * Get campaign by ID
-   */
-  static async getCampaign(req: Request, res: Response) {
+  static async getCampaign(req: AuthenticatedRequest, res: Response) {
     try {
       const { campaignId } = req.params;
-      const organizerId = req.organizer!.id;
+      const organizerId = req.organizer?.id || req.user?.id;
+
+      if (!organizerId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
 
       const campaign = await prisma.campaign.findFirst({
         where: {
           id: campaignId,
-          organizerId,
+          organizerId
         },
         include: {
-          organizer: {
-            select: {
-              name: true,
-              email: true,
-              company: true,
-            },
+          claims: {
+            orderBy: { claimedAt: 'desc' },
+            take: 50
           },
           _count: {
-            select: {
-              claims: true,
-            },
-          },
-        },
+            select: { claims: true }
+          }
+        }
       });
 
       if (!campaign) {
         return res.status(404).json({
           success: false,
-          error: 'Campaign not found',
+          error: 'Campaign not found'
         });
       }
 
       return res.json({
         success: true,
-        data: campaign,
+        data: campaign
       });
     } catch (error) {
-      console.error('❌ Get campaign error:', error);
+      console.error('Error fetching campaign:', error);
       return res.status(500).json({
         success: false,
-        error: 'Failed to get campaign',
+        error: 'Failed to fetch campaign'
       });
     }
   }
 
-  /**
-   * Update campaign
-   */
-  static async updateCampaign(req: Request, res: Response) {
+  static async updateCampaign(req: AuthenticatedRequest, res: Response) {
     try {
       const { campaignId } = req.params;
-      const organizerId = req.organizer!.id;
-      const validatedData = UpdateCampaignSchema.parse(req.body);
+      const organizerId = req.organizer?.id || req.user?.id;
+      const updateData = req.body;
 
+      if (!organizerId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
+
+      // Verify campaign belongs to organizer
       const existingCampaign = await prisma.campaign.findFirst({
         where: {
           id: campaignId,
-          organizerId,
-        },
+          organizerId
+        }
       });
 
       if (!existingCampaign) {
         return res.status(404).json({
           success: false,
-          error: 'Campaign not found',
+          error: 'Campaign not found'
         });
       }
 
-      const updateData: any = { ...validatedData };
-      if (validatedData.eventDate) {
-        updateData.eventDate = new Date(validatedData.eventDate);
-      }
-
-      const campaign = await prisma.campaign.update({
+      const updatedCampaign = await prisma.campaign.update({
         where: { id: campaignId },
-        data: updateData,
-        include: {
-          _count: {
-            select: {
-              claims: true,
-            },
-          },
-        },
+        data: {
+          ...updateData,
+          eventDate: updateData.eventDate ? new Date(updateData.eventDate) : undefined,
+          updatedAt: new Date()
+        }
       });
-
-      console.log(`🎪 Campaign updated: ${campaign.name}`);
 
       return res.json({
         success: true,
-        data: {
-          ...campaign,
-          message: 'Campaign updated successfully',
-        },
+        data: updatedCampaign
       });
     } catch (error) {
-      console.error('❌ Update campaign error:', error);
-      
-      if (error instanceof Error && error.name === 'ZodError') {
-        return res.status(400).json({
-          success: false,
-          error: 'Validation failed',
-          details: error,
-        });
-      }
-
+      console.error('Error updating campaign:', error);
       return res.status(500).json({
         success: false,
-        error: 'Failed to update campaign',
+        error: 'Failed to update campaign'
       });
     }
   }
 
-  /**
-   * Delete campaign
-   */
-  static async deleteCampaign(req: Request, res: Response) {
+  static async deleteCampaign(req: AuthenticatedRequest, res: Response) {
     try {
       const { campaignId } = req.params;
-      const organizerId = req.organizer!.id;
+      const organizerId = req.organizer?.id || req.user?.id;
 
-      const campaign = await prisma.campaign.findFirst({
-        where: {
-          id: campaignId,
-          organizerId,
-        },
-        include: {
-          _count: {
-            select: {
-              claims: true,
-            },
-          },
-        },
-      });
-
-      if (!campaign) {
-        return res.status(404).json({
+      if (!organizerId) {
+        return res.status(401).json({
           success: false,
-          error: 'Campaign not found',
+          error: 'Authentication required'
         });
       }
 
-      // Prevent deletion if there are claims
-      if (campaign._count.claims > 0) {
-        return res.status(400).json({
+      // Verify campaign belongs to organizer
+      const existingCampaign = await prisma.campaign.findFirst({
+        where: {
+          id: campaignId,
+          organizerId
+        }
+      });
+
+      if (!existingCampaign) {
+        return res.status(404).json({
           success: false,
-          error: `Cannot delete campaign with ${campaign._count.claims} claims. Deactivate instead.`,
+          error: 'Campaign not found'
         });
       }
 
       await prisma.campaign.delete({
-        where: { id: campaignId },
+        where: { id: campaignId }
       });
-
-      console.log(`🗑️ Campaign deleted: ${campaign.name}`);
 
       return res.json({
         success: true,
-        message: 'Campaign deleted successfully',
+        message: 'Campaign deleted successfully'
       });
     } catch (error) {
-      console.error('❌ Delete campaign error:', error);
+      console.error('Error deleting campaign:', error);
       return res.status(500).json({
         success: false,
-        error: 'Failed to delete campaign',
+        error: 'Failed to delete campaign'
       });
     }
   }
 
-  /**
-   * Get campaign analytics
-   */
-/**
- * Get campaign analytics
- */
-static async getCampaignAnalytics(req: Request, res: Response) {
-  try {
-    const { campaignId } = req.params;
-    const organizerId = req.organizer!.id;
-
-    const campaign = await prisma.campaign.findFirst({
-      where: {
-        id: campaignId,
-        organizerId,
-      },
-    });
-
-    if (!campaign) {
-      return res.status(404).json({
-        success: false,
-        error: 'Campaign not found',
-      });
-    }
-
-    // 📊 Claims counts
-    const [totalClaims, claimsToday, claimsThisWeek, claimsThisMonth] = await Promise.all([
-      prisma.claim.count({
-        where: { campaignId },
-      }),
-      prisma.claim.count({
-        where: {
-          campaignId,
-          claimedAt: {
-            gte: new Date(new Date().setHours(0, 0, 0, 0)),
-          },
-        },
-      }),
-      prisma.claim.count({
-        where: {
-          campaignId,
-          claimedAt: {
-            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-          },
-        },
-      }),
-      prisma.claim.count({
-        where: {
-          campaignId,
-          claimedAt: {
-            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-          },
-        },
-      }),
-    ]);
-
-    // 📅 Daily claims (últimos 30 días)
-    const dailyClaims = await prisma.$queryRaw<
-      { date: string; claims: number }[]
-    >`
-      SELECT 
-        to_char(date_trunc('day', "claimedAt"), 'YYYY-MM-DD') AS date,
-        count(*)::int AS claims
-      FROM "Claim"
-      WHERE "campaignId" = ${campaignId}
-        AND "claimedAt" >= NOW() - INTERVAL '30 days'
-      GROUP BY 1
-      ORDER BY 1 DESC
-    `;
-
-    // ⛽ Gas stats
-    const gasStats = await prisma.claim.aggregate({
-      where: { campaignId },
-      _sum: { gasCost: true },
-      _avg: { gasCost: true },
-    });
-
-    return res.json({
-      success: true,
-      data: {
-        campaign: {
-          id: campaign.id,
-          name: campaign.name,
-          maxClaims: campaign.maxClaims,
-        },
-        claims: {
-          total: totalClaims,
-          today: claimsToday,
-          thisWeek: claimsThisWeek,
-          thisMonth: claimsThisMonth,
-          remaining: campaign.maxClaims ? campaign.maxClaims - totalClaims : null,
-        },
-        gas: {
-          totalCost: gasStats._sum.gasCost || 0,
-          averageCost: gasStats._avg.gasCost || 0,
-          totalCostSOL: (gasStats._sum.gasCost || 0) / 1e9,
-        },
-        dailyClaims,
-      },
-    });
-  } catch (error) {
-    console.error('❌ Get campaign analytics error:', error);
-    // ⚠️ Devuelve un fallback en vez de crashear
-    return res.status(200).json({
-      success: true,
-      data: {
-        campaign: null,
-        claims: {
-          total: 0,
-          today: 0,
-          thisWeek: 0,
-          thisMonth: 0,
-          remaining: null,
-        },
-        gas: {
-          totalCost: 0,
-          averageCost: 0,
-          totalCostSOL: 0,
-        },
-        dailyClaims: [],
-      },
-    });
-  }
-}
-
-  /**
-   * Get campaign claims
-   */
-  static async getCampaignClaims(req: Request, res: Response) {
+  static async getCampaignAnalytics(req: AuthenticatedRequest, res: Response) {
     try {
       const { campaignId } = req.params;
-      const organizerId = req.organizer!.id;
-      const { page = 1, limit = 50 } = req.query;
+      const organizerId = req.organizer?.id || req.user?.id;
 
+      if (!organizerId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
+
+      // Verify campaign belongs to organizer
       const campaign = await prisma.campaign.findFirst({
-        where: {
-          id: campaignId,
-          organizerId,
-        },
+        where: { id: campaignId, organizerId }
       });
 
       if (!campaign) {
         return res.status(404).json({
           success: false,
-          error: 'Campaign not found',
+          error: 'Campaign not found'
         });
       }
 
-      const skip = (Number(page) - 1) * Number(limit);
-      const take = Number(limit);
+      // Get time periods
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const thisWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-      const [claims, total] = await Promise.all([
-        prisma.claim.findMany({
-          where: { campaignId },
-          skip,
-          take,
-          orderBy: { claimedAt: 'desc' },
-        }),
+      // Get claims data
+      const [
+        totalClaims,
+        todayClaims,
+        weekClaims,
+        monthClaims,
+        recentClaims,
+        totalGasCost
+      ] = await Promise.all([
+        // Total claims
+        prisma.claim.count({ where: { campaignId } }),
+        
+        // Today's claims
         prisma.claim.count({
-          where: { campaignId },
+          where: {
+            campaignId,
+            claimedAt: { gte: today }
+          }
         }),
+        
+        // This week's claims
+        prisma.claim.count({
+          where: {
+            campaignId,
+            claimedAt: { gte: thisWeek }
+          }
+        }),
+        
+        // This month's claims
+        prisma.claim.count({
+          where: {
+            campaignId,
+            claimedAt: { gte: thisMonth }
+          }
+        }),
+        
+        // Recent claims for chart (last 30 days)
+        prisma.claim.findMany({
+          where: {
+            campaignId,
+            claimedAt: { gte: thirtyDaysAgo }
+          },
+          orderBy: { claimedAt: 'asc' }
+        }),
+        
+        // Total gas cost
+        prisma.claim.aggregate({
+          where: { campaignId },
+          _sum: { gasCost: true }
+        })
       ]);
+
+      // Calculate remaining claims
+      const remaining = campaign.maxClaims ? Math.max(0, campaign.maxClaims - totalClaims) : null;
+
+      // Calculate average gas cost
+      const totalGas = totalGasCost._sum.gasCost || 0;
+      const averageGas = totalClaims > 0 ? totalGas / totalClaims : 0;
+
+      // Process daily claims for chart
+      const dailyClaims = this.groupClaimsByDay(recentClaims);
+
+      // ✅ Fixed: Return data in the format expected by frontend
+      return res.json({
+        success: true,
+        data: {
+          campaign: {
+            id: campaign.id,
+            name: campaign.name,
+            maxClaims: campaign.maxClaims
+          },
+          claims: {
+            total: totalClaims,
+            today: todayClaims,
+            thisWeek: weekClaims,
+            thisMonth: monthClaims,
+            remaining: remaining
+          },
+          gas: {
+            totalCost: totalGas,
+            averageCost: averageGas,
+            totalCostSOL: totalGas / 1e9
+          },
+          dailyClaims: dailyClaims
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching campaign analytics:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to fetch campaign analytics'
+      });
+    }
+  }
+
+  static async getCampaignClaims(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { campaignId } = req.params;
+      const organizerId = req.organizer?.id || req.user?.id;
+
+      if (!organizerId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
+
+      // Verify campaign belongs to organizer
+      const campaign = await prisma.campaign.findFirst({
+        where: { id: campaignId, organizerId }
+      });
+
+      if (!campaign) {
+        return res.status(404).json({
+          success: false,
+          error: 'Campaign not found'
+        });
+      }
+
+      // Get query parameters for pagination
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 100;
+
+      // Get total count
+      const total = await prisma.claim.count({ where: { campaignId } });
+
+      // Get claims with pagination
+      const claims = await prisma.claim.findMany({
+        where: { campaignId },
+        orderBy: { claimedAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit
+      });
 
       return res.json({
         success: true,
         data: {
+          campaign: {
+            id: campaign.id,
+            name: campaign.name
+          },
           claims,
           pagination: {
-            page: Number(page),
-            limit: Number(limit),
+            page,
+            limit,
             total,
-            pages: Math.ceil(total / Number(limit)),
-          },
-        },
+            pages: Math.ceil(total / limit)
+          }
+        }
       });
     } catch (error) {
-      console.error('❌ Get campaign claims error:', error);
+      console.error('Error fetching campaign claims:', error);
       return res.status(500).json({
         success: false,
-        error: 'Failed to get campaign claims',
+        error: 'Failed to fetch campaign claims'
+      });
+    }
+  }
+
+  private static groupClaimsByDay(claims: any[]) {
+    const grouped = new Map<string, number>();
+    
+    claims.forEach(claim => {
+      const date = new Date(claim.claimedAt).toISOString().split('T')[0];
+      grouped.set(date, (grouped.get(date) || 0) + 1);
+    });
+
+    return Array.from(grouped.entries()).map(([date, count]) => ({
+      date,
+      claims: count
+    }));
+  }
+
+  static async claimPOAP(req: Request, res: Response) {
+    try {
+      const { campaignId } = req.params;
+      const { userPublicKey, secretCode } = req.body;
+
+      if (!userPublicKey) {
+        return res.status(400).json({
+          success: false,
+          error: 'userPublicKey is required'
+        });
+      }
+
+      // Find campaign
+      const campaign = await prisma.campaign.findUnique({
+        where: { id: campaignId },
+        include: {
+          organizer: true,
+          _count: { select: { claims: true } }
+        }
+      });
+
+      if (!campaign) {
+        return res.status(404).json({
+          success: false,
+          error: 'Campaign not found'
+        });
+      }
+
+      if (!campaign.isActive) {
+        return res.status(400).json({
+          success: false,
+          error: 'Campaign is not active'
+        });
+      }
+
+      // Check secret code if required
+      if (campaign.secretCode && campaign.secretCode !== secretCode) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid secret code'
+        });
+      }
+
+      // Check max claims
+      if (campaign.maxClaims && campaign._count.claims >= campaign.maxClaims) {
+        return res.status(400).json({
+          success: false,
+          error: 'Campaign has reached maximum claims'
+        });
+      }
+
+      // Check if user already claimed
+      const existingClaim = await prisma.claim.findFirst({
+        where: {
+          campaignId,
+          userPublicKey
+        }
+      });
+
+      if (existingClaim) {
+        return res.status(400).json({
+          success: false,
+          error: 'POAP already claimed by this user'
+        });
+      }
+
+      // TODO: Integrate with NFT minting service
+      // const mintResult = await this.nftMintService.mintPOAP(...)
+
+      // Record the claim
+      const claim = await prisma.claim.create({
+        data: {
+          campaignId,
+          userPublicKey,
+          // mintAddress: mintResult.mintAddress,
+          // transactionHash: mintResult.transactionSignature,
+          claimedAt: new Date()
+        }
+      });
+
+      return res.status(201).json({
+        success: true,
+        data: {
+          message: 'POAP claimed successfully!',
+          claim,
+          campaign: {
+            name: campaign.name,
+            description: campaign.description,
+            eventDate: campaign.eventDate
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error claiming POAP:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to claim POAP'
       });
     }
   }
