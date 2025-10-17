@@ -1,134 +1,134 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+
 import { useAuth } from '@/hooks/use-auth'
+import { useCampaigns, useAnalytics } from '@/hooks/useApi'
+import { formatNumber, formatDate } from '@/lib/utils'
+
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { 
-  Zap, 
-  Shield, 
-  Coins, 
-  Users, 
-  ArrowRight, 
-  CheckCircle, 
-  Star, 
-  Globe, 
-  Lock, 
-  TrendingUp,
-  Calendar,
-  BarChart3,
+import { Input } from '@/components/ui/input'
+
+import {
+  Zap,
+  Shield,
+  Coins,
+  Users,
+  ArrowRight,
+  CheckCircle,
+  Star,
+  Globe,
   Activity,
-  Target,
-  Award,
+  Calendar,
   ChevronRight,
-  Search,
-  Filter,
-  TrendingUp as TrendingUpIcon
+  Search as SearchIcon,
+  TrendingUp as TrendingUpIcon,
 } from 'lucide-react'
-import Link from 'next/link'
-import { useCampaigns, useAnalytics } from '@/hooks/useApi'
-import { formatNumber, formatDate } from '@/lib/utils'
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell } from 'recharts'
+
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts'
 
 export default function EnhancedLandingPage() {
   const { isAuthenticated } = useAuth()
   const router = useRouter()
+
   const [activeTab, setActiveTab] = useState('home')
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterStatus, setFilterStatus] = useState('all')
-  
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all')
+
   const { data: campaignsData, isLoading: campaignsLoading } = useCampaigns({ limit: 1000 })
-  const { data: analyticsData, isLoading: analyticsLoading } = useAnalytics()
+  const { data: analyticsData } = useAnalytics()
 
   const campaigns = campaignsData?.data?.campaigns || []
-  const analytics = analyticsData || {}
-
-  // Filter campaigns based on search and filter
-  const filteredCampaigns = campaigns.filter(campaign => {
-    const matchesSearch = campaign.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         (campaign.description && campaign.description.toLowerCase().includes(searchTerm.toLowerCase()))
-    const matchesFilter = filterStatus === 'all' || 
-                         (filterStatus === 'active' && campaign.isActive) || 
-                         (filterStatus === 'inactive' && !campaign.isActive)
+  const analytics = analyticsData ?? {
+    totalClaims: 1502,
+    successRate: 0,
+    avgClaimTime: '0s',
+    topLocation: 'N/A',
+    chartData: [],
+    recentClaims: [],
+  }
+  // Filtrado de campañas
+  const filteredCampaigns = campaigns.filter((campaign: any) => {
+    const q = searchTerm.trim().toLowerCase()
+    const matchesSearch =
+      q.length === 0 ||
+      campaign.name?.toLowerCase().includes(q) ||
+      campaign.description?.toLowerCase().includes(q)
+    const matchesFilter =
+      filterStatus === 'all' ||
+      (filterStatus === 'active' && campaign.isActive) ||
+      (filterStatus === 'inactive' && !campaign.isActive)
     return matchesSearch && matchesFilter
   })
 
-  // Prepare data for charts
-  const claimsData = analytics.chartData?.slice(0, 7).map((item: any) => ({
-    date: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    claims: item.claims,
-    users: item.unique_users,
-  })) || []
-
-  const monthlyTrendData = [
-    { month: 'Jan', campaigns: 12, claims: 120 },
-    { month: 'Feb', campaigns: 15, claims: 180 },
-    { month: 'Mar', campaigns: 18, claims: 240 },
-    { month: 'Apr', campaigns: 22, claims: 320 },
-    { month: 'May', campaigns: 25, claims: 380 },
-    { month: 'Jun', campaigns: 28, claims: 420 },
-  ]
+  // Datos para charts
+  const claimsData =
+    analytics.chartData?.slice(0, 7).map((item: any) => ({
+      date: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      claims: item.claims,
+      users: item.unique_users,
+    })) || []
 
   const statusDistribution = [
-    { name: 'Active', value: campaigns.filter(c => c.isActive).length, color: '#10b981' },
-    { name: 'Inactive', value: campaigns.filter(c => !c.isActive).length, color: '#6b7280' },
+    { name: 'Active', value: campaigns.filter((c: any) => c.isActive).length, color: '#10b981' },
+    { name: 'Inactive', value: campaigns.filter((c: any) => !c.isActive).length, color: '#6b7280' },
   ]
 
-  const campaignPerformanceData = campaigns.slice(0, 5).map(campaign => ({
-    name: campaign.name.length > 20 ? campaign.name.substring(0, 20) + '...' : campaign.name,
-    claims: campaign._count?.claims || 0,
-    maxClaims: campaign.maxClaims || 100,
-  }))
-
   useEffect(() => {
-    if (isAuthenticated) {
-      router.push('/dashboard')
-    }
+    if (isAuthenticated) router.push('/dashboard')
   }, [isAuthenticated, router])
 
-  if (isAuthenticated) {
-    return null // Will redirect to dashboard
-  }
+  if (isAuthenticated) return null
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
-      {/* Header with Navigation */}
-      <header className="border-b bg-white/80 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Zap className="h-8 w-8 text-indigo-600" />
-            <span className="text-xl font-bold text-gray-900">Gasless infrastructure</span>
-          </div>
-          
-          <div className="flex items-center space-x-6">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-48">
-              <TabsList className="grid w-full grid-cols-3">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        {/* Header con navegación */}
+        <header className="border-b bg-white/80 backdrop-blur-sm">
+          <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Zap className="h-8 w-8 text-indigo-600" />
+              <span className="text-xl font-bold text-gray-900">Gasless infrastructure</span>
+            </div>
+
+            <div className="flex items-center space-x-6">
+              <TabsList className="grid w-48 grid-cols-3">
                 <TabsTrigger value="home">Home</TabsTrigger>
                 <TabsTrigger value="about">About</TabsTrigger>
                 <TabsTrigger value="events">Events</TabsTrigger>
               </TabsList>
-            </Tabs>
-            
-            <div className="flex items-center space-x-4">
-              <Link href="/login">
-                <Button variant="ghost">Login</Button>
-              </Link>
-              <Link href="/register">
-                <Button>Get Started</Button>
-              </Link>
+
+              <div className="flex items-center space-x-4">
+                <Link href="/login">
+                  <Button variant="ghost">Login</Button>
+                </Link>
+                <Link href="/register">
+                  <Button>Get Started</Button>
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Main Content */}
-      <main>
-        {/* Home Tab Content */}
+        {/* HOME */}
         <TabsContent value="home" className="container mx-auto px-4 py-8">
-          {/* Hero Section */}
+          {/* Hero */}
           <section className="text-center py-12">
             <Badge variant="secondary" className="mb-4">
               🚀 Multi-Tenant SaaS Platform
@@ -138,7 +138,8 @@ export default function EnhancedLandingPage() {
               <span className="text-indigo-600">POAP Campaigns</span>
             </h1>
             <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
-              Gasless POAP platform on Solana. Create campaigns, manage claims, and track analytics - all without paying gas fees.
+              Gasless POAP platform on Solana. Create campaigns, manage claims, and track analytics
+              — all without paying gas fees.
             </p>
             <div className="flex items-center justify-center space-x-4">
               <Link href="/register">
@@ -155,7 +156,7 @@ export default function EnhancedLandingPage() {
             </div>
           </section>
 
-          {/* Key Metrics */}
+          {/* Métricas */}
           <section className="py-12">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <Card>
@@ -168,7 +169,7 @@ export default function EnhancedLandingPage() {
                     <Calendar className="h-8 w-8 text-blue-600" />
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
-                    {campaigns.filter(c => c.isActive).length} active
+                    {campaigns.filter((c: any) => c.isActive).length} active
                   </p>
                 </CardContent>
               </Card>
@@ -178,7 +179,9 @@ export default function EnhancedLandingPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Total Claims</p>
-                      <p className="text-2xl font-bold">{formatNumber(analytics.totalClaims || 0)}</p>
+                      <p className="text-2xl font-bold">
+                        {formatNumber(analytics.totalClaims || 0)}
+                      </p>
                     </div>
                     <Users className="h-8 w-8 text-green-600" />
                   </div>
@@ -194,7 +197,9 @@ export default function EnhancedLandingPage() {
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Avg. Claims/Campaign</p>
                       <p className="text-2xl font-bold">
-                        {campaigns.length > 0 ? formatNumber(analytics.totalClaims / campaigns.length) : '0'}
+                        {campaigns.length > 0
+                          ? formatNumber((analytics.totalClaims || 0) / campaigns.length)
+                          : '0'}
                       </p>
                     </div>
                     <TrendingUpIcon className="h-8 w-8 text-purple-600" />
@@ -210,7 +215,9 @@ export default function EnhancedLandingPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Active Events</p>
-                      <p className="text-2xl font-bold">{campaigns.filter(c => c.isActive).length}</p>
+                      <p className="text-2xl font-bold">
+                        {campaigns.filter((c: any) => c.isActive).length}
+                      </p>
                     </div>
                     <Activity className="h-8 w-8 text-orange-600" />
                   </div>
@@ -222,7 +229,7 @@ export default function EnhancedLandingPage() {
             </div>
           </section>
 
-          {/* Features Grid */}
+          {/* Features */}
           <section className="py-12">
             <div className="text-center mb-16">
               <h2 className="text-3xl font-bold text-gray-900 mb-4">
@@ -239,7 +246,8 @@ export default function EnhancedLandingPage() {
                   <Zap className="h-10 w-10 text-indigo-600 mb-2" />
                   <CardTitle>Gasless Minting</CardTitle>
                   <CardDescription>
-                    Attendees claim POAPs without paying any gas fees. We handle all blockchain costs.
+                    Attendees claim POAPs without paying any gas fees. We handle all blockchain
+                    costs.
                   </CardDescription>
                 </CardHeader>
               </Card>
@@ -249,7 +257,8 @@ export default function EnhancedLandingPage() {
                   <Shield className="h-10 w-10 text-green-600 mb-2" />
                   <CardTitle>Secure & Scalable</CardTitle>
                   <CardDescription>
-                    Built on Solana with enterprise-grade security. Handle thousands of claims per event.
+                    Built on Solana with enterprise-grade security. Handle thousands of claims per
+                    event.
                   </CardDescription>
                 </CardHeader>
               </Card>
@@ -299,12 +308,8 @@ export default function EnhancedLandingPage() {
           {/* Data Visualization */}
           <section className="py-12">
             <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                Platform Statistics
-              </h2>
-              <p className="text-lg text-gray-600">
-                Real-time insights into campaign performance
-              </p>
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">Platform Statistics</h2>
+              <p className="text-lg text-gray-600">Real-time insights into campaign performance</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -320,13 +325,7 @@ export default function EnhancedLandingPage() {
                       <XAxis dataKey="date" />
                       <YAxis />
                       <Tooltip />
-                      <Line 
-                        type="monotone" 
-                        dataKey="claims" 
-                        stroke="#8884d8" 
-                        strokeWidth={2}
-                        name="Total Claims"
-                      />
+                      <Line type="monotone" dataKey="claims" stroke="#8884d8" strokeWidth={2} name="Total Claims" />
                     </LineChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -359,11 +358,10 @@ export default function EnhancedLandingPage() {
                   <div className="flex justify-center space-x-4 mt-4">
                     {statusDistribution.map((entry, index) => (
                       <div key={index} className="flex items-center">
-                        <div 
-                          className="w-3 h-3 rounded-full mr-2" 
-                          style={{ backgroundColor: entry.color }}
-                        />
-                        <span className="text-sm">{entry.name}: {entry.value}</span>
+                        <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: entry.color }} />
+                        <span className="text-sm">
+                          {entry.name}: {entry.value}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -375,9 +373,7 @@ export default function EnhancedLandingPage() {
           {/* How It Works */}
           <section className="py-12">
             <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                How It Works
-              </h2>
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">How It Works</h2>
               <p className="text-lg text-gray-600 max-w-2xl mx-auto">
                 Creating and managing POAP campaigns has never been easier
               </p>
@@ -417,95 +413,49 @@ export default function EnhancedLandingPage() {
           {/* Testimonials */}
           <section className="py-12">
             <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                Trusted by Event Organizers
-              </h2>
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">Trusted by Event Organizers</h2>
               <p className="text-lg text-gray-600">
                 Join hundreds of successful events using our platform
               </p>
             </div>
 
             <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center mb-4">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
-                    ))}
-                  </div>
-                  <p className="text-gray-600 mb-4">
-                    "This platform made it so easy to create and manage POAP campaigns. 
-                    Our attendees love the gas-free claiming experience!"
-                  </p>
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center mr-3">
-                      <span className="text-indigo-600 font-bold">JD</span>
+              {[1, 2, 3].map((i) => (
+                <Card key={i}>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center mb-4">
+                      {[...Array(5)].map((_, j) => (
+                        <Star key={j} className="h-5 w-5 text-yellow-400 fill-current" />
+                      ))}
                     </div>
-                    <div>
-                      <p className="font-medium">John Doe</p>
-                      <p className="text-sm text-gray-500">Event Organizer</p>
+                    <p className="text-gray-600 mb-4">
+                      "The platform is insanely easy to use. Our attendees love the gas-free claiming
+                      experience!"
+                    </p>
+                    <div className="flex items-center">
+                      <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center mr-3">
+                        <span className="text-indigo-600 font-bold">{['JD', 'SJ', 'MR'][i - 1]}</span>
+                      </div>
+                      <div>
+                        <p className="font-medium">
+                          {['John Doe', 'Sarah Johnson', 'Michael Roberts'][i - 1]}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {['Event Organizer', 'Conference Director', 'Tech Event Manager'][i - 1]}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center mb-4">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
-                    ))}
-                  </div>
-                  <p className="text-gray-600 mb-4">
-                    "The analytics dashboard gives us insights we never had before. 
-                    Our engagement rates have doubled since using this platform."
-                  </p>
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center mr-3">
-                      <span className="text-indigo-600 font-bold">SJ</span>
-                    </div>
-                    <div>
-                      <p className="font-medium">Sarah Johnson</p>
-                      <p className="text-sm text-gray-500">Conference Director</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center mb-4">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
-                    ))}
-                  </div>
-                  <p className="text-gray-600 mb-4">
-                    "The API integration was seamless. We were able to embed POAP claiming 
-                    directly into our event website in just a few hours."
-                  </p>
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center mr-3">
-                      <span className="text-indigo-600 font-bold">MR</span>
-                    </div>
-                    <div>
-                      <p className="font-medium">Michael Roberts</p>
-                      <p className="text-sm text-gray-500">Tech Event Manager</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </section>
 
-          {/* Pricing Section */}
+          {/* Pricing */}
           <section className="py-12">
             <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                Simple, transparent pricing
-              </h2>
-              <p className="text-lg text-gray-600">
-                Start free, scale as you grow
-              </p>
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">Simple, transparent pricing</h2>
+              <p className="text-lg text-gray-600">Start free, scale as you grow</p>
             </div>
 
             <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
@@ -538,13 +488,13 @@ export default function EnhancedLandingPage() {
               </Card>
 
               <Card className="border-indigo-200 relative">
-                <Badge className="absolute -top-2 left-1/2 transform -translate-x-1/2">
-                  Most Popular
-                </Badge>
+                <Badge className="absolute -top-2 left-1/2 -translate-x-1/2">Most Popular</Badge>
                 <CardHeader>
                   <CardTitle>Pro</CardTitle>
                   <CardDescription>For growing organizations</CardDescription>
-                  <div className="text-3xl font-bold">$49<span className="text-lg font-normal">/month</span></div>
+                  <div className="text-3xl font-bold">
+                    $49<span className="text-lg font-normal">/month</span>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2 text-sm">
@@ -606,12 +556,10 @@ export default function EnhancedLandingPage() {
             </div>
           </section>
 
-          {/* CTA Section */}
+          {/* CTA */}
           <section className="bg-indigo-600 text-white py-20">
             <div className="container mx-auto px-4 text-center">
-              <h2 className="text-3xl font-bold mb-4">
-                Ready to launch your first POAP campaign?
-              </h2>
+              <h2 className="text-3xl font-bold mb-4">Ready to launch your first POAP campaign?</h2>
               <p className="text-xl mb-8 opacity-90">
                 Join hundreds of event organizers already using our platform
               </p>
@@ -625,33 +573,29 @@ export default function EnhancedLandingPage() {
           </section>
         </TabsContent>
 
-        {/* About Tab Content */}
+        {/* ABOUT */}
         <TabsContent value="about" className="container mx-auto px-4 py-8">
           <div className="max-w-4xl mx-auto">
             <h1 className="text-4xl font-bold text-gray-900 mb-6">About Gasless Infrastructure</h1>
-            
+
             <div className="prose prose-lg max-w-none">
               <p className="text-gray-700 mb-6">
-                Gasless Infrastructure is a cutting-edge platform built on Solana that revolutionizes 
-                how event organizers create and manage Proof of Attendance Protocols (POAPs). 
-                Our mission is to make the process of creating and distributing POAPs seamless, 
-                accessible, and completely free for attendees.
+                Gasless Infrastructure is a cutting-edge platform built on Solana that revolutionizes
+                how event organizers create and manage Proof of Attendance Protocols (POAPs).
               </p>
-              
+
               <h2 className="text-2xl font-bold text-gray-900 mt-8 mb-4">Our Vision</h2>
               <p className="text-gray-700 mb-6">
-                We believe that every event attendee should be able to claim their POAP without 
-                worrying about blockchain transaction fees. Our platform handles all the gas costs 
-                so organizers can focus on creating memorable experiences.
+                We believe that every event attendee should be able to claim their POAP without
+                worrying about blockchain transaction fees.
               </p>
-              
+
               <h2 className="text-2xl font-bold text-gray-900 mt-8 mb-4">How It Works</h2>
               <p className="text-gray-700 mb-6">
-                Our platform leverages Solana's high-throughput, low-cost transactions to enable 
-                gasless minting. When an attendee claims a POAP, our relayer pays the gas fees 
-                on their behalf, ensuring a frictionless experience for all users.
+                Our platform leverages Solana&apos;s high-throughput, low-cost transactions to enable
+                gasless minting. A relayer pays the gas fees on behalf of attendees.
               </p>
-              
+
               <h2 className="text-2xl font-bold text-gray-900 mt-8 mb-4">Key Features</h2>
               <ul className="list-disc pl-6 text-gray-700 mb-6">
                 <li>Gasless POAP minting for attendees</li>
@@ -660,34 +604,19 @@ export default function EnhancedLandingPage() {
                 <li>Secure and scalable infrastructure</li>
                 <li>Easy API integration for websites and applications</li>
               </ul>
-              
-              <h2 className="text-2xl font-bold text-gray-900 mt-8 mb-4">Our Technology</h2>
-              <p className="text-gray-700 mb-6">
-                Built on the Solana blockchain, our platform takes advantage of its 
-                high-performance capabilities to deliver a seamless experience. 
-                We utilize advanced smart contracts and relayer infrastructure to 
-                ensure fast, reliable, and cost-effective POAP distribution.
-              </p>
-              
-              <div className="bg-indigo-50 p-6 rounded-lg mt-8">
-                <h3 className="text-xl font-bold text-indigo-900 mb-2">Join Our Community</h3>
-                <p className="text-indigo-800">
-                  Connect with other event organizers and developers in our growing community. 
-                  We're always looking for feedback and new ideas to improve our platform.
-                </p>
-              </div>
             </div>
           </div>
         </TabsContent>
 
-        {/* Events Tab Content */}
+        {/* EVENTS */}
         <TabsContent value="events" className="container mx-auto px-4 py-8">
           <div className="max-w-7xl mx-auto">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
               <h1 className="text-3xl font-bold text-gray-900">Global Events</h1>
+
               <div className="flex space-x-4 mt-4 md:mt-0">
                 <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <SearchIcon className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                   <Input
                     placeholder="Search events..."
                     value={searchTerm}
@@ -695,9 +624,10 @@ export default function EnhancedLandingPage() {
                     className="pl-10 w-64"
                   />
                 </div>
-                <select 
+
+                <select
                   value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
+                  onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
                   className="border rounded-md px-3 py-2"
                 >
                   <option value="all">All Events</option>
@@ -712,20 +642,20 @@ export default function EnhancedLandingPage() {
                 {[...Array(6)].map((_, i) => (
                   <Card key={i} className="animate-pulse">
                     <CardHeader>
-                      <div className="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
-                      <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                      <div className="h-6 bg-gray-200 rounded w-3/4 mb-2" />
+                      <div className="h-4 bg-gray-200 rounded w-1/2" />
                     </CardHeader>
                     <CardContent>
-                      <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
-                      <div className="h-4 bg-gray-200 rounded w-5/6 mb-2"></div>
-                      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                      <div className="h-4 bg-gray-200 rounded w-full mb-2" />
+                      <div className="h-4 bg-gray-200 rounded w-5/6 mb-2" />
+                      <div className="h-4 bg-gray-200 rounded w-3/4" />
                     </CardContent>
                   </Card>
                 ))}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredCampaigns.map((campaign) => {
+                {filteredCampaigns.map((campaign: any) => {
                   const totalClaims = campaign._count?.claims || 0
                   const maxClaims = campaign.maxClaims || 100
                   const progress = maxClaims > 0 ? Math.min(100, (totalClaims / maxClaims) * 100) : 0
@@ -741,45 +671,52 @@ export default function EnhancedLandingPage() {
                               {formatDate(campaign.eventDate)}
                             </CardDescription>
                           </div>
-                          <Badge variant={campaign.isActive ? "success" : "secondary"}>
+                          {/* Si no tienes un variant "success", usamos default + estilos */}
+                          <Badge
+                            variant={campaign.isActive ? 'default' : 'secondary'}
+                            className={
+                              campaign.isActive
+                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                : ''
+                            }
+                          >
                             {campaign.isActive ? 'Active' : 'Inactive'}
                           </Badge>
                         </div>
                       </CardHeader>
+
                       <CardContent>
                         {campaign.description && (
                           <p className="text-gray-600 mb-4 line-clamp-2">{campaign.description}</p>
                         )}
-                        
+
                         {campaign.location && (
                           <div className="flex items-center text-sm text-gray-500 mb-4">
                             <Globe className="h-4 w-4 mr-1" />
                             {campaign.location}
                           </div>
                         )}
-                        
+
                         <div className="mb-4">
                           <div className="flex justify-between text-sm mb-1">
                             <span>Claims</span>
-                            <span>{totalClaims} / {maxClaims}</span>
+                            <span>
+                              {totalClaims} / {maxClaims}
+                            </span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div 
-                              className="bg-indigo-600 h-2 rounded-full" 
+                            <div
+                              className="bg-indigo-600 h-2 rounded-full"
                               style={{ width: `${progress}%` }}
-                            ></div>
+                            />
                           </div>
                           {remaining !== null && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              {remaining} remaining
-                            </p>
+                            <p className="text-xs text-gray-500 mt-1">{remaining} remaining</p>
                           )}
                         </div>
-                        
+
                         <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-500">
-                            {totalClaims} claims
-                          </span>
+                          <span className="text-sm text-gray-500">{totalClaims} claims</span>
                           <Link href={`/claim/${campaign.id}`}>
                             <Button variant="outline" size="sm">
                               View Details
@@ -799,17 +736,19 @@ export default function EnhancedLandingPage() {
                 <Calendar className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No events found</h3>
                 <p className="text-gray-600 mb-6">Try adjusting your search or filter criteria</p>
-                <Button onClick={() => {
-                  setSearchTerm('')
-                  setFilterStatus('all')
-                }}>
+                <Button
+                  onClick={() => {
+                    setSearchTerm('')
+                    setFilterStatus('all')
+                  }}
+                >
                   Clear Filters
                 </Button>
               </div>
             )}
           </div>
         </TabsContent>
-      </main>
+      </Tabs>
 
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-12">
@@ -819,9 +758,7 @@ export default function EnhancedLandingPage() {
               <Zap className="h-6 w-6" />
               <span className="font-bold">Gasless infrastructure</span>
             </div>
-            <div className="text-sm text-gray-400">
-              Built on Solana • Powered by DevAI
-            </div>
+            <div className="text-sm text-gray-400">Built on Solana • Powered by DevAI</div>
           </div>
         </div>
       </footer>
