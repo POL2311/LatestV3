@@ -97,7 +97,7 @@ export default function EnhancedLandingPage() {
   if (isAuthenticated) return null
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
+    <div id="enhanced-landing">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         {/* Header con navegación */}
         <header className="border-b bg-white/80 backdrop-blur-sm">

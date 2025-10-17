@@ -67,3 +67,151 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ==== Tema pastel y efecto gas solo para la landing ===== */
+#enhanced-landing {
+  /* Re-define variables solo dentro de esta página */
+  --background: 220 100% 95%;
+  --foreground: 252 19% 28%;
+  --card: 252 25% 90%;
+  --card-foreground: 252 19% 28%;
+  --popover: 252 25% 90%;
+  --popover-foreground: 252 19% 28%;
+  --primary: 280 60% 78%;
+  --primary-foreground: 252 19% 28%;
+  --secondary: 210 60% 80%;
+  --secondary-foreground: 252 19% 28%;
+  --accent: 180 65% 85%;
+  --accent-foreground: 252 19% 28%;
+  --muted: 245 30% 85%;
+  --muted-foreground: 252 19% 35%;
+  --border: 252 25% 85%;
+  --input: 252 25% 85%;
+  --ring: 250 25% 60%;
+  --radius: 0.5rem;
+  --chart-1: 280 70% 70%;
+  --chart-2: 210 70% 70%;
+  --chart-3: 260 70% 70%;
+  --chart-4: 240 70% 70%;
+  --chart-5: 200 70% 70%;
+
+  /* Fondo degradado pastel */
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(120deg, #dfeaff 0%, #e8ddff 50%, #f5d9ff 100%);
+}
+
+/* Efecto “gas” subiendo */
+#enhanced-landing::before,
+#enhanced-landing::after {
+  content: '';
+  position: absolute;
+  bottom: -10%;
+  width: 250px;
+  height: 250px;
+  border-radius: 50%;
+  filter: blur(50px);
+  opacity: 0.5;
+  z-index: 0;
+}
+#enhanced-landing::before {
+  left: 10%;
+  background: radial-gradient(circle, rgba(255,160,221,0.5), rgba(255,160,221,0) 70%);
+  animation: gas-move1 30s infinite ease-in-out alternate;
+}
+#enhanced-landing::after {
+  right: 15%;
+  background: radial-gradient(circle, rgba(130,190,255,0.5), rgba(130,190,255,0) 70%);
+  animation: gas-move2 35s infinite ease-in-out alternate;
+}
+@keyframes gas-move1 {
+  0%   { transform: translateY(0) translateX(0); }
+  100% { transform: translateY(-40%) translateX(10%); }
+}
+@keyframes gas-move2 {
+  0%   { transform: translateY(0) translateX(0); }
+  100% { transform: translateY(-45%) translateX(-10%); }
+}
+
+/* Asegura contenido por encima del gas */
+#enhanced-landing > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Botones con efecto cristalino pastel (incluye los <Button />) */
+#enhanced-landing button {
+  border-radius: 9999px;
+  border: 1px solid rgba(255,255,255,0.35);
+  backdrop-filter: blur(10px);
+  background: linear-gradient(90deg, rgba(255,185,230,0.4), rgba(180,170,255,0.4));
+  padding: 0.5rem 1.5rem;
+  color: #3c326c;
+  font-weight: 600;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.08);
+}
+#enhanced-landing button:hover {
+  background: linear-gradient(90deg, rgba(255,200,240,0.5), rgba(200,190,255,0.5));
+  border-color: rgba(255,255,255,0.5);
+}
+
+/* Header/Footer integrados al fondo pastel */
+#enhanced-landing header {
+  background: transparent;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+#enhanced-landing footer {
+  background: transparent;
+  border-top: 1px solid rgba(255,255,255,0.2);
+}
+
+/* ============ FIX DEL MINI RECUADRO EN TABS (shadcn Tabs) ============ */
+/* Quita el contenedor gris/recortado del TabsList */
+#enhanced-landing header [role="tablist"]{
+  background: transparent !important;
+  padding: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  /* opcional: separa las pastillas */
+  display: inline-flex;
+  gap: 12px;
+}
+
+/* Estilo cristalino para cada tab */
+#enhanced-landing header [role="tab"]{
+  background: linear-gradient(90deg, rgba(255,185,230,.35), rgba(180,170,255,.35));
+  border: 1px solid rgba(255,255,255,.35);
+  backdrop-filter: blur(10px);
+  border-radius: 9999px;
+  padding: .5rem 1rem;
+  color: #3c326c;
+  box-shadow: 0 4px 10px rgba(0,0,0,.06);
+  outline: none;
+}
+
+/* Estado activo más notorio */
+#enhanced-landing header [role="tab"][data-state="active"]{
+  background: linear-gradient(90deg, rgba(255,200,240,.5), rgba(200,190,255,.5));
+  border-color: rgba(255,255,255,.55);
+  color: #2a2550;
+}
+
+/* Sin halos molestos; focus accesible pero sutil */
+#enhanced-landing header [role="tab"]:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(180,170,255,.45);
+}
+
+/* ---------- Variante “solo texto” (descomenta si NO quieres pastillas) ---------- */
+/*
+#enhanced-landing header [role="tab"]{
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 .25rem !important;
+}
+#enhanced-landing header [role="tab"][data-state="active"]{
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+*/
