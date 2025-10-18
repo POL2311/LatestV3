@@ -115,9 +115,15 @@ export class NFTClaimController {
       const fallOrganizer = metadata?.organizer || 'Demo Organizer';
       const seed = (eventId || 'demo') + '-' + userPublicKey.slice(0, 8);
 
-      const imageUrl =
-        metadata?.image ||
+      // Use uploaded image from campaign if available, otherwise use dicebear
+      let imageUrl = metadata?.image || 
         `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(seed)}&backgroundColor=6366f1`;
+      
+      // If we have a campaign with an image, use that instead
+      if (req.body.campaignImageUrl) {
+        imageUrl = req.body.campaignImageUrl;
+      }
+
       const externalUrl =
         metadata?.externalUrl ||
         `https://poap-infra.example/event/${encodeURIComponent(eventId || 'demo')}`;

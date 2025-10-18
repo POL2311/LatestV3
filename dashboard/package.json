@@ -39,6 +39,7 @@
     "date-fns": "^3.0.6",
     "js-cookie": "^3.0.5",
     "lucide-react": "^0.303.0",
+    "multer": "^2.0.2",
     "next": "^14.0.4",
     "qrcode": "^1.5.4",
     "react": "^18.2.0",
@@ -53,6 +54,7 @@
   },
   "devDependencies": {
     "@types/js-cookie": "^3.0.6",
+    "@types/multer": "^2.0.0",
     "@types/node": "^20.10.4",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^18.2.45",

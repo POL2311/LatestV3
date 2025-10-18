@@ -39,6 +39,8 @@ const schema = z.object({
   eventDate: z.string().min(1, 'Required'),
   startAt: z.string().optional(),
   endAt: z.string().optional(),
+  // New field for image upload
+  imageFile: z.any().optional(),
 })
 
 export type CampaignFormValues = z.infer<typeof schema>
@@ -79,6 +81,7 @@ export function CampaignForm({
       eventDate: '', // datetime-local
       startAt: '',
       endAt: '',
+      imageFile: undefined,
       ...defaultValues,
       // Forzamos que el campo visible tenga el formato local correcto si viene ISO
       ...(defaultValues?.eventDate
@@ -101,37 +104,55 @@ export function CampaignForm({
     }
   }, [defaultValues, reset])
 
-  const submit = async (values: CampaignFormValues) => {
-    // Normalizamos fechas a ISO
-    const payload = {
-      name: values.name,
-      slug: values.slug,
-      description: values.description || undefined,
-      location: values.location || undefined,
-      imageUrl: values.imageUrl || undefined,
-      externalUrl: values.externalUrl || undefined,
-      secretCode: values.secretCode || undefined,
-      maxClaims: values.maxClaims ?? undefined,
-      eventDate: toISO(values.eventDate), // ← ISO
-      startAt: toISO(values.startAt),
-      endAt: toISO(values.endAt),
-      metadata: undefined,
+// ...código igual arriba...
+
+const submit = async (values: CampaignFormValues) => {
+  const payload = {
+    name: values.name,
+    slug: values.slug,
+    description: values.description || undefined,
+    location: values.location || undefined,
+    imageUrl: values.imageUrl || undefined, // puedes mantenerlo; imageUri es el que subimos
+    externalUrl: values.externalUrl || undefined,
+    secretCode: values.secretCode || undefined,
+    maxClaims: values.maxClaims ?? undefined,
+    eventDate: toISO(values.eventDate),
+    startAt: toISO(values.startAt),
+    endAt: toISO(values.endAt),
+    metadata: undefined,
+  };
+
+  if (!payload.eventDate) {
+    toast.error('Invalid event date');
+    return;
+  }
+
+  try {
+    // onSubmit debe devolver { data: { id: string } } o similar
+    const created = await onSubmit(payload);
+
+    // Sube imagen si se eligió archivo
+    const file: File | undefined = (values as any).imageFile;
+    const campaignId = created?.data?.id || created?.id;
+
+    if (file && campaignId) {
+      const fd = new FormData();
+      fd.append('image', file);
+      const res = await fetch(`/api/campaigns/${campaignId}/image`, {
+        method: 'POST',
+        body: fd,
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      toast.success('Campaign image uploaded');
     }
 
-    if (!payload.eventDate) {
-      toast.error('Invalid event date')
-      return
-    }
+    if (mode === 'create') reset();
+    toast.success('Campaign saved');
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Failed to submit campaign');
+  }
+};
 
-try {
-  await onSubmit(payload)
-  if (mode === 'create') {
-    reset()
-  }
-} catch (e: any) {
-  toast.error(e?.message ?? 'Failed to submit campaign')
-}
-  }
 
   const eventDateVal = watch('eventDate')
 
@@ -195,6 +216,23 @@ try {
           <Label htmlFor="maxClaims">Max Claims</Label>
           <Input id="maxClaims" type="number" min={1} placeholder="e.g. 100" {...register('maxClaims')} />
           {errors.maxClaims && <p className="text-sm text-red-600">{errors.maxClaims.message}</p>}
+        </div>
+
+        {/* Image Upload Field */}
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor="imageFile">Upload Custom Image (Optional)</Label>
+          <Input 
+            id="imageFile" 
+            type="file" 
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                setValue('imageFile', file);
+              }
+            }}
+          />
+          <p className="text-xs text-gray-500">Upload an image to use for your NFT (PNG, JPG, GIF)</p>
         </div>
 
         {/* Si vas a habilitar ventanas de vigencia, descomenta estos campos

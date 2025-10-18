@@ -13,7 +13,7 @@ import { Separator } from '@/components/ui/separator'
 import { Calendar, MapPin, Users, ExternalLink, CheckCircle, AlertTriangle, Loader2, Copy, Zap } from 'lucide-react'
 import { formatDate, formatNumber } from '@/lib/utils'
 import { apiClient } from '@/lib/api'
-import type { PublicCampaign } from '@/lib/types'   // 👈 usa PublicCampaign aquí
+import type { PublicCampaign } from '@/lib/types'
 import { toast } from 'react-hot-toast'
 import Link from 'next/link'
 
@@ -21,19 +21,25 @@ interface ClaimPageProps {
   params: { id: string }
 }
 
+type ClaimResult = {
+  message?: string
+  // si el backend manda 'nft'
+  nft?: { mint?: string | null; transactionSignature?: string | null } | null
+  // si el backend sólo manda 'claim'
+  claim?: { mintAddress?: string | null; transactionHash?: string | null } | null
+  // URL opcional
+  explorerUrl?: string | null
+}
+
 interface ClaimState {
   status: 'idle' | 'loading' | 'success' | 'error'
   error?: string
-  result?: {
-    message: string
-    nft: { mint: string; transactionSignature: string }
-    explorerUrl: string
-  }
+  result?: ClaimResult
 }
 
 export default function ClaimPage({ params }: ClaimPageProps) {
   const { publicKey, connected } = useWallet()
-  const [campaign, setCampaign] = useState<PublicCampaign | null>(null)  // ✅ AHORA DENTRO
+  const [campaign, setCampaign] = useState<PublicCampaign | null>(null)
   const [loading, setLoading] = useState(true)
   const [secretCode, setSecretCode] = useState('')
   const [claimState, setClaimState] = useState<ClaimState>({ status: 'idle' })
@@ -42,8 +48,11 @@ export default function ClaimPage({ params }: ClaimPageProps) {
     (async () => {
       try {
         const response = await apiClient.getPublicCampaign(params.id)
-        if (response.success && response.data) setCampaign(response.data)
-        else setClaimState({ status: 'error', error: 'Campaign not found or inactive' })
+        if (response.success && response.data) {
+          setCampaign(response.data)
+        } else {
+          setClaimState({ status: 'error', error: 'Campaign not found or inactive' })
+        }
       } catch {
         setClaimState({ status: 'error', error: 'Failed to load campaign' })
       } finally {
@@ -51,7 +60,6 @@ export default function ClaimPage({ params }: ClaimPageProps) {
       }
     })()
   }, [params.id])
-
 
   const handleClaim = async () => {
     if (!connected || !publicKey) {
@@ -67,12 +75,9 @@ export default function ClaimPage({ params }: ClaimPageProps) {
     setClaimState({ status: 'loading' })
 
     try {
-      // Use the Next.js API route to proxy the claim
       const response = await fetch(`/api/claim/${params.id}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userPublicKey: publicKey.toString(),
           secretCode: secretCode || undefined,
@@ -81,28 +86,27 @@ export default function ClaimPage({ params }: ClaimPageProps) {
 
       const data = await response.json()
 
-      if (data.success) {
-        setClaimState({
-          status: 'success',
-          result: {
-            message: data.data.message,
-            nft: data.data.nft,
-            explorerUrl: data.data.explorerUrl,
-          }
-        })
+      if (data?.success) {
+        // Normalizamos para soportar ambos contratos de respuesta
+        const normalized: ClaimResult = {
+          message: data?.data?.message,
+          nft: data?.data?.nft ?? {
+            mint: data?.data?.claim?.mintAddress ?? null,
+            transactionSignature: data?.data?.claim?.transactionHash ?? null,
+          },
+          claim: data?.data?.claim ?? null,
+          explorerUrl: data?.data?.explorerUrl ?? null,
+        }
+
+        setClaimState({ status: 'success', result: normalized })
         toast.success('POAP claimed successfully!')
       } else {
-        setClaimState({
-          status: 'error',
-          error: data.error || 'Failed to claim POAP'
-        })
-        toast.error(data.error || 'Failed to claim POAP')
+        const errMsg = data?.error || 'Failed to claim POAP'
+        setClaimState({ status: 'error', error: errMsg })
+        toast.error(errMsg)
       }
-    } catch (error) {
-      setClaimState({
-        status: 'error',
-        error: 'Network error. Please try again.'
-      })
+    } catch {
+      setClaimState({ status: 'error', error: 'Network error. Please try again.' })
       toast.error('Network error. Please try again.')
     }
   }
@@ -135,12 +139,8 @@ export default function ClaimPage({ params }: ClaimPageProps) {
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
-            <p className="text-sm text-gray-600 mb-4">
-              {claimState.error}
-            </p>
-            <Link href="/">
-              <Button>Go Home</Button>
-            </Link>
+            <p className="text-sm text-gray-600 mb-4">{claimState.error}</p>
+            <Link href="/"><Button>Go Home</Button></Link>
           </CardContent>
         </Card>
       </div>
@@ -148,6 +148,27 @@ export default function ClaimPage({ params }: ClaimPageProps) {
   }
 
   if (!campaign) return null
+
+  // Cálculo de "remaining" seguro para UI
+  const totalClaims = campaign._count?.claims ?? 0
+  const remaining = typeof campaign.maxClaims === 'number' ? Math.max(0, campaign.maxClaims - totalClaims) : null
+
+  // Fallbacks seguros para mint/tx
+  const mintAddr =
+    claimState?.result?.nft?.mint ??
+    claimState?.result?.claim?.mintAddress ??
+    null
+
+  const txSig =
+    claimState?.result?.nft?.transactionSignature ??
+    claimState?.result?.claim?.transactionHash ??
+    null
+
+  // Construye explorer URL si no vino, usando mint o tx cuando exista (devnet)
+  const explorerUrl =
+    claimState?.result?.explorerUrl ??
+    (mintAddr ? `https://explorer.solana.com/address/${mintAddr}?cluster=devnet` :
+     txSig ? `https://explorer.solana.com/tx/${txSig}?cluster=devnet` : null)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
@@ -205,13 +226,14 @@ export default function ClaimPage({ params }: ClaimPageProps) {
                 <div className="flex items-center">
                   <Users className="mr-2 h-4 w-4 text-gray-500" />
                   <span>
-                    {formatNumber(campaign._count?.claims || 0)} claimed
-                    {campaign.maxClaims && ` / ${formatNumber(campaign.maxClaims)}`}
+                    {formatNumber(totalClaims)} claimed
+                    {typeof campaign.maxClaims === 'number' && ` / ${formatNumber(campaign.maxClaims)}`}
                   </span>
                 </div>
                 <div className="flex items-center">
-                  <Badge variant={campaign.isActive ? "success" : "secondary"}>
-                    {campaign.isActive ? "Active" : "Inactive"}
+                  {/* Ajusta el variant según tu sistema de estilos */}
+                  <Badge variant={campaign.isActive ? 'default' : 'secondary'}>
+                    {campaign.isActive ? 'Active' : 'Inactive'}
                   </Badge>
                 </div>
               </div>
@@ -244,7 +266,6 @@ export default function ClaimPage({ params }: ClaimPageProps) {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Wallet Connection */}
               {!connected ? (
                 <div className="text-center">
                   <p className="text-gray-600 mb-4">
@@ -254,38 +275,47 @@ export default function ClaimPage({ params }: ClaimPageProps) {
                 </div>
               ) : (
                 <>
-                  {/* Success State */}
-                  {claimState.status === 'success' && claimState.result && (
+                  {/* Success */}
+                  {claimState.status === 'success' && (
                     <Alert variant="default" className="border-green-200 bg-green-50">
                       <CheckCircle className="h-4 w-4 text-green-600" />
                       <AlertDescription className="text-green-800">
                         <div className="space-y-2">
-                          <p className="font-medium">{claimState.result.message}</p>
+                          <p className="font-medium">
+                            {claimState.result?.message ?? 'Claim completed'}
+                          </p>
                           <div className="space-y-1 text-sm">
-                            <p>
-                              <strong>NFT Mint:</strong>{' '}
-                              <code className="bg-green-100 px-2 py-1 rounded">
-                                {claimState.result.nft.mint}
-                              </code>
-                            </p>
-                            <p>
-                              <a
-                                href={claimState.result.explorerUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center text-green-700 hover:text-green-600"
-                              >
-                                <ExternalLink className="mr-1 h-3 w-3" />
-                                View on Solana Explorer
-                              </a>
-                            </p>
+                            {mintAddr ? (
+                              <p>
+                                <strong>NFT Mint:</strong>{' '}
+                                <code className="bg-green-100 px-2 py-1 rounded">{mintAddr}</code>
+                              </p>
+                            ) : (
+                              <p className="text-muted-foreground">
+                                On-chain mint pending / off-chain recorded
+                              </p>
+                            )}
+
+                            {explorerUrl && (
+                              <p>
+                                <a
+                                  href={explorerUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center text-green-700 hover:text-green-600"
+                                >
+                                  <ExternalLink className="mr-1 h-3 w-3" />
+                                  View on Solana Explorer
+                                </a>
+                              </p>
+                            )}
                           </div>
                         </div>
                       </AlertDescription>
                     </Alert>
                   )}
 
-                  {/* Error State */}
+                  {/* Error */}
                   {claimState.status === 'error' && claimState.error && (
                     <Alert variant="destructive">
                       <AlertTriangle className="h-4 w-4" />
@@ -293,7 +323,7 @@ export default function ClaimPage({ params }: ClaimPageProps) {
                     </Alert>
                   )}
 
-                  {/* Claim Form */}
+                  {/* Formulario de claim (solo si no hay éxito) */}
                   {claimState.status !== 'success' && (
                     <>
                       <div className="space-y-4">
@@ -356,10 +386,8 @@ export default function ClaimPage({ params }: ClaimPageProps) {
               <div className="text-center text-sm text-gray-500 space-y-1">
                 <p>🔒 This POAP is minted gaslessly - you pay no fees!</p>
                 <p>⚡ Powered by Solana blockchain</p>
-                {campaign.maxClaims && (
-                  <p>
-                    📊 {formatNumber(campaign.claimsRemaining || 0)} POAPs remaining
-                  </p>
+                {typeof remaining === 'number' && (
+                  <p>📊 {formatNumber(remaining)} POAPs remaining</p>
                 )}
               </div>
             </CardContent>

@@ -45,29 +45,33 @@ model ApiKey {
 }
 
 model Campaign {
-  id              String   @id @default(cuid())
-  name            String
-  description     String?
-  eventDate       DateTime
-  location        String?
-  imageUrl        String?
-  externalUrl     String?
-  secretCode      String?
-  maxClaims       Int?
-  isActive        Boolean  @default(true)
-  organizerId     String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  eventDate    DateTime
+  location     String?
+  imageUrl     String?   // (ya lo usabas) -> opcional conservar
+  externalUrl  String?
+  secretCode   String?
+  maxClaims    Int?
+  isActive     Boolean   @default(true)
+  organizerId  String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
   // Metadata
-  metadata        Json?
-  
-  // Relations
-  organizer       Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
-  claims          Claim[]
-  
+  metadata     Json?
+
+  imageUrl    String?   // URI final de imagen (local/S3/IPFS)
+  metadataUri  String?   // URI del metadata JSON para NFT
+
+  // Relaciones
+  organizer Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  claims    Claim[]
+
   @@map("campaigns")
 }
+
 
 model Claim {
   id                String   @id @default(cuid())

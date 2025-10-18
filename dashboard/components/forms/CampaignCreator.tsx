@@ -5,7 +5,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Card, CardContent } from '../ui/card'
 import { useCreateCampaign } from '../../hooks/use-api'
-import { Calendar, MapPin, Image, Key, Users, X } from 'lucide-react'
+import { Calendar, MapPin, Image, Key, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface CampaignCreatorProps {
@@ -24,8 +24,7 @@ export const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onSuc
     maxSupply: '',
     requireCode: true,
   })
-
-  
+  const [imageFile, setImageFile] = useState<File | null>(null) // ✅ nuevo
 
   const createCampaignMutation = useCreateCampaign()
 
@@ -38,40 +37,55 @@ export const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onSuc
     }
 
     try {
-      // ✅ Fixed: Use correct data format matching the API
-      await createCampaignMutation.mutateAsync({
+      // crea campaña (el hook devuelve Campaign directo)
+      const created = await createCampaignMutation.mutateAsync({
         name: formData.name,
         description: formData.description || undefined,
-        eventDate: new Date(formData.eventDate).toISOString(), // ✅ Convert to ISO string
+        eventDate: new Date(formData.eventDate).toISOString(),
         location: formData.location || undefined,
-        imageUrl: formData.image || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(formData.name)}`,
+        imageUrl:
+          formData.image ||
+          `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(formData.name)}`,
         secretCode: formData.requireCode ? formData.secretCode : undefined,
         maxClaims: formData.maxSupply ? parseInt(formData.maxSupply) : undefined,
       })
 
+      const campaignId = created.id // ✅ ya no .data.id
+
+      // ✅ subir imagen si hay archivo
+      if (imageFile && campaignId) {
+        const fd = new FormData()
+        fd.append('image', imageFile)
+
+        const res = await fetch(`/api/campaigns/${campaignId}/image`, {
+          method: 'POST',
+          body: fd,
+          // Si usas Bearer y no cookie httpOnly, descomenta:
+          // headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        })
+        if (!res.ok) throw new Error('Image upload failed')
+      }
+
       onSuccess()
       onClose()
-    } catch (error) {
+      toast.success('Campaign created')
+    } catch (error: any) {
       console.error('Error creating campaign:', error)
-      // Error handling is now done by the mutation hook
+      toast.error(error?.message ?? 'Failed to create campaign')
     }
   }
 
   const generateSecretCode = () => {
-    const code = formData.name
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, '')
-      .slice(0, 8) + '2024'
-    setFormData(prev => ({ ...prev, secretCode: code }))
+    const code =
+      formData.name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) + '2024'
+    setFormData((prev) => ({ ...prev, secretCode: code }))
   }
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            🎪 Create New POAP Campaign
-          </DialogTitle>
+          <DialogTitle className="flex items-center gap-2">🎪 Create New POAP Campaign</DialogTitle>
           <DialogDescription>
             Set up a new Proof of Attendance Protocol campaign for your event
           </DialogDescription>
@@ -81,17 +95,15 @@ export const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onSuc
           {/* Basic Information */}
           <Card>
             <CardContent className="pt-6">
-              <h3 className="font-semibold mb-4 flex items-center gap-2">
-                📝 Basic Information
-              </h3>
-              
+              <h3 className="font-semibold mb-4 flex items-center gap-2">📝 Basic Information</h3>
+
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="name">Event Name *</Label>
                   <Input
                     id="name"
                     value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                     placeholder="e.g., Solana Breakpoint 2024"
                     required
                   />
@@ -102,7 +114,9 @@ export const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onSuc
                   <textarea
                     id="description"
                     value={formData.description}
-                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, description: e.target.value }))
+                    }
                     placeholder="Describe your event..."
                     className="w-full min-h-[80px] px-3 py-2 border border-input rounded-md resize-none"
                   />
@@ -118,7 +132,9 @@ export const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onSuc
                       id="eventDate"
                       type="date"
                       value={formData.eventDate}
-                      onChange={(e) => setFormData(prev => ({ ...prev, eventDate: e.target.value }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, eventDate: e.target.value }))
+                      }
                       required
                     />
                   </div>
@@ -131,7 +147,9 @@ export const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onSuc
                     <Input
                       id="location"
                       value={formData.location}
-                      onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, location: e.target.value }))
+                      }
                       placeholder="e.g., Singapore, Virtual"
                     />
                   </div>
@@ -147,18 +165,32 @@ export const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onSuc
                 <Image className="w-4 h-4" />
                 Visual & Branding
               </h3>
-              
-              <div>
-                <Label htmlFor="image">Event Image URL</Label>
-                <Input
-                  id="image"
-                  value={formData.image}
-                  onChange={(e) => setFormData(prev => ({ ...prev, image: e.target.value }))}
-                  placeholder="https://example.com/event-image.jpg"
-                />
-                <p className="text-sm text-muted-foreground mt-1">
-                  Leave empty to auto-generate based on event name
-                </p>
+
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="image">Event Image URL</Label>
+                  <Input
+                    id="image"
+                    value={formData.image}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, image: e.target.value }))}
+                    placeholder="https://example.com/event-image.jpg"
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Leave empty to auto-generate based on event name
+                  </p>
+                </div>
+
+                {/* Upload opcional */}
+                <div className="mt-2">
+                  <Label htmlFor="imageFile">Upload Image (optional)</Label>
+                  <Input
+                    id="imageFile"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                  />
+                  <p className="text-xs text-muted-foreground">PNG/JPG/WEBP/GIF • max 5MB</p>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -170,14 +202,16 @@ export const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onSuc
                 <Key className="w-4 h-4" />
                 Access Control
               </h3>
-              
+
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
                     id="requireCode"
                     checked={formData.requireCode}
-                    onChange={(e) => setFormData(prev => ({ ...prev, requireCode: e.target.checked }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, requireCode: e.target.checked }))
+                    }
                     className="rounded"
                   />
                   <Label htmlFor="requireCode">Require secret code to claim</Label>
@@ -187,19 +221,19 @@ export const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onSuc
                   <div>
                     <Label htmlFor="secretCode" className="flex items-center gap-2">
                       Secret Code
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={generateSecretCode}
-                      >
+                      <Button type="button" variant="outline" size="sm" onClick={generateSecretCode}>
                         Generate
                       </Button>
                     </Label>
                     <Input
                       id="secretCode"
                       value={formData.secretCode}
-                      onChange={(e) => setFormData(prev => ({ ...prev, secretCode: e.target.value.toUpperCase() }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          secretCode: e.target.value.toUpperCase(),
+                        }))
+                      }
                       placeholder="BREAKPOINT2024"
                     />
                   </div>
@@ -214,7 +248,9 @@ export const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onSuc
                     id="maxSupply"
                     type="number"
                     value={formData.maxSupply}
-                    onChange={(e) => setFormData(prev => ({ ...prev, maxSupply: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, maxSupply: e.target.value }))
+                    }
                     placeholder="e.g., 1000"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
@@ -256,16 +292,12 @@ export const CampaignCreator: React.FC<CampaignCreatorProps> = ({ onClose, onSuc
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={createCampaignMutation.isPending}
               className="min-w-[120px]"
             >
-              {createCampaignMutation.isPending ? (
-                <>🎨 Creating...</>
-              ) : (
-                <>🚀 Create Campaign</>
-              )}
+              {createCampaignMutation.isPending ? <>🎨 Creating...</> : <>🚀 Create Campaign</>}
             </Button>
           </div>
         </form>

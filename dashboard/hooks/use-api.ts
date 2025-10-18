@@ -48,20 +48,24 @@ export function useCampaignClaims(id: string, params?: { page?: number; limit?: 
 export function useCreateCampaign() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: CampaignForm) => apiClient.createCampaign(data),
-    onSuccess: (res) => {
-      if (res.success) {
-        qc.invalidateQueries({ queryKey: ['campaigns'] })
-        toast.success('Campaign created successfully!')
-      } else {
-        toast.error(res.error || 'Failed to create campaign')
+    // ⬇️ devolvemos directamente el Campaign (no ApiResponse)
+    mutationFn: async (data: CampaignForm) => {
+      const res = await apiClient.createCampaign(data) // ApiResponse<Campaign>
+      if (!res?.success || !res?.data) {
+        throw new Error(res?.error || 'Failed to create campaign')
       }
+      return res.data 
+    },
+    onSuccess: (_campaign) => {
+      qc.invalidateQueries({ queryKey: ['campaigns'] })
+      toast.success('Campaign created successfully!')
     },
     onError: (err: any) => {
-      toast.error(err?.response?.data?.error || 'Failed to create campaign')
+      toast.error(err?.response?.data?.error || err?.message || 'Failed to create campaign')
     },
   })
 }
+
 
 export function useUpdateCampaign() {
   const qc = useQueryClient()
