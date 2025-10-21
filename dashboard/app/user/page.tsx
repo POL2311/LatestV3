@@ -2,6 +2,7 @@ import { BadgeFilter } from "@/components/badges/BadgeFilter";
 import { ProfileStats } from "@/components/user/ProfileStats";
 import { BadgeDisplay } from "@/components/badges/BadgeDisplay";
 import { GlassCard } from "@/components/ui/glass-card";
+import { Button } from "@/components/ui/button";
 
 // Mock data - in real implementation this would come from API
 const mockBadges = [
