@@ -2,68 +2,326 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =========================
+   Design tokens (HSL)
+   ========================= */
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    /* ---- Light ---- */
+    --background: 0 0% 100% / 0;       /* ⬅︎ transparente (antes sólido) */
     --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
+
+    --card: 0 0% 100% / .06;
     --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
+
+    --popover: 0 0% 100% / .06;
     --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
+
+    --primary: 0 0% 100%;              /* blanco */
+    --primary-foreground: 0 0% 9%;
+
+    --secondary: 0 0% 100% / .08;
     --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
+
+    --muted: 0 0% 100% / .60;
+    --muted-foreground: 0 0% 100% / .72;
+
+    --accent: 0 0% 100% / .10;
     --accent-foreground: 0 0% 9%;
+
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --radius: 0.5rem;
+
+    --border: 0 0% 100% / .16;
+    --input: 0 0% 100% / .16;
+    --ring: 0 0% 100%;
+
+    --radius: 1rem;
+
+    /* Charts */
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
+
+    /* Glass */
+    --glass-border: 0 0% 100% / 0.18;
+    --glass-bg: 0 0% 100% / 0.08;
+    --glass-overlay: 0 0% 0% / 0.40;
   }
 
   .dark {
-    --background: 0 0% 3.9%;
+    /* ---- Dark (también transparente) ---- */
+    --background: 220 20% 10% / 0;     /* ⬅︎ transparente para que NO salga panel negro */
     --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
+
+    --card: 0 0% 100% / .06;
     --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
+
+    --popover: 0 0% 100% / .06;
     --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
+
+    --primary: 0 0% 100%;
     --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
+
+    --secondary: 0 0% 100% / .08;
     --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
+
+    --muted: 0 0% 100% / .62;
+    --muted-foreground: 0 0% 100% / .72;
+
+    --accent: 0 0% 100% / .10;
     --accent-foreground: 0 0% 98%;
+
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+
+    --border: 0 0% 100% / .18;
+    --input: 0 0% 100% / .18;
+    --ring: 0 0% 100%;
+    --glass-border: 0 0% 100% / .18;
+    --glass-bg: 0 0% 100% / .08;
+    --glass-overlay: 0 0% 0% / .40;
+  }
+
+  * { @apply border-border; }
+  html { color-scheme: light dark; }
+  body { @apply text-primary antialiased; } /* ⬅︎ blanco por defecto */
+
+  ::selection { background: hsl(243 75% 60% / .35); color: #fff; }
+}
+
+/* =========================
+   Component styles / helpers
+   ========================= */
+@layer components {
+  /* Superficie glass genérica */
+  .glass {
+    @apply rounded-2xl border backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,.35)];
+    background: hsla(var(--glass-bg));
+    border-color: hsla(var(--glass-border));
+  }
+
+  /* Cards glass por defecto (sobrescribe shadcn card) */
+  .card-glass {
+    @apply rounded-3xl border backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,.35)];
+    background: hsla(var(--glass-bg));
+    border-color: hsla(var(--glass-border));
+    color: hsl(var(--primary)); /* texto blanco */
+  }
+
+  /* Inputs/Selects/Textareas glass por defecto */
+  .field-glass {
+    @apply w-full rounded-xl border px-3 py-2 outline-none transition;
+    background: hsla(var(--glass-bg));
+    border-color: hsla(var(--glass-border));
+    color: hsl(var(--primary));
+  }
+  .field-glass::placeholder { color: hsl(var(--muted-foreground)); }
+  .field-glass:focus {
+    @apply ring-2 ring-offset-0;
+    ring-color: hsl(var(--ring));
+    border-color: hsl(var(--ring));
+    background: hsla(var(--glass-bg));
+  }
+
+  /* Menús / modales (Radix/shadcn) en glass automáticamente */
+  :where(.dialog-content,
+         .popover-content,
+         .dropdown-menu-content,
+         .select-content,
+         .sheet-content,
+         .command-dialog) {
+    @apply glass !important;
+  }
+
+  /* Header/Title/Description dentro de cards/modales: tonos legibles */
+  .heading-strong { @apply text-white; }
+  .heading-soft   { color: hsl(var(--muted)); }
+
+  /* Fichas tipo panel “liquid” */
+  .liquid-panel {
+    @apply rounded-[36px] border backdrop-blur-sm;
+    background: linear-gradient(160deg,#eaeaea 0%, #2348c4 40%, #66597c 100%);
+    border-color: rgba(255,255,255,0.14);
+    box-shadow:
+      0 30px 80px rgba(0,0,0,0.35),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  /* Botón gel blanco */
+  .liquid-cta {
+    @apply relative inline-flex items-center justify-center rounded-full px-5 py-3 font-semibold text-white transition;
+    background: #fff;
+    box-shadow: inset 0 -4px 12px rgba(0,0,0,.06), 0 8px 30px rgba(255,255,255,.15);
+  }
+  .liquid-cta::before {
+    content: ""; position: absolute; inset: 0; border-radius: 9999px; pointer-events: none;
+    background: radial-gradient(120% 120% at 50% -20%, rgba(255,255,255,.7), transparent 45%),
+                linear-gradient(180deg, rgba(255,255,255,.5), rgba(255,255,255,0));
+    opacity: .7;
   }
 }
 
-@layer base {
-  * {
-    @apply border-border;
+/* =========================
+   Utilities extras
+   ========================= */
+@layer utilities {
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0;
+    --tw-ring-color: hsl(var(--ring));
   }
-  body {
-    @apply bg-background text-foreground;
+
+  .thin-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
+  .thin-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,.15); border-radius: 9999px; border: 2px solid transparent; background-clip: content-box;
+  }
+  .thin-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.25); }
+}
+
+/* Fondo raíz con viñeta/gradiente (lo que ya te gusta) */
+:root {
+  --bg: 16 22 35;
+  --fg: 255 255 255;
+}
+body {
+  color: rgb(var(--fg));
+  background:
+    radial-gradient(1000px 300px at 10% -10%, rgba(16,185,129,.10), transparent),
+    radial-gradient(900px 270px at 95% -5%, rgba(168,85,247,.10), transparent),
+    rgb(var(--bg));
+}
+/* ===== Glass depth (más legible) ===== */
+:root{
+  --glass-fill: 255 255 255;          /* base blanca */
+  --glass-alpha: .18;                 /* opacidad de relleno */
+  --glass-border-alpha: .28;          /* opacidad del borde */
+  --glass-highlight-alpha: .35;       /* highlight superior */
+  --glass-shadow: 0 24px 70px rgba(0,0,0,.35);
+}
+
+/* tarjeta/bloque de cristal por defecto */
+.glass{
+  border-radius: 24px;
+  background: rgba(var(--glass-fill), var(--glass-alpha));
+  border: 1px solid rgba(255,255,255,var(--glass-border-alpha));
+  backdrop-filter: saturate(1.15) blur(18px);
+  -webkit-backdrop-filter: saturate(1.15) blur(18px);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,.18);
+  position: relative;
+}
+
+/* highlight suave arriba */
+.glass::before{
+  content:"";
+  position:absolute; inset:0;
+  border-radius: inherit;
+  pointer-events:none;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,var(--glass-highlight-alpha)) 0%, rgba(255,255,255,0) 40%);
+  mix-blend-mode: screen;
+  opacity:.55;
+}
+
+/* versión más elevada (útil para modales) */
+.glass-strong{
+  --glass-alpha: .22;
+  --glass-border-alpha: .35;
+  backdrop-filter: saturate(1.2) blur(22px);
+  -webkit-backdrop-filter: saturate(1.2) blur(22px);
+  box-shadow:
+    0 30px 90px rgba(0,0,0,.45),
+    0 2px 8px rgba(0,0,0,.25) inset,
+    inset 0 1px 0 rgba(255,255,255,.22);
+}
+
+/* overlay del modal: claro y suave, no negro */
+.modal-overlay{
+  background:
+    radial-gradient(1000px 400px at 50% -10%, rgba(255,255,255,.12), transparent 60%),
+    rgba(10,14,19,.28);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* ===== Formularios de cristal (inputs, selects…) ===== */
+.glass-form label{ color: rgba(255,255,255,.88); }
+
+.glass-form input,
+.glass-form textarea,
+.glass-form select{
+  background: rgba(255,255,255,.16);
+  border: 1px solid rgba(255,255,255,.28);
+  color: #fff;
+  border-radius: 14px;
+  padding: 10px 12px;
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,.08);
+}
+
+.glass-form input::placeholder,
+.glass-form textarea::placeholder{
+  color: rgba(255,255,255,.70);
+}
+
+.glass-form input:focus,
+.glass-form textarea:focus,
+.glass-form select:focus{
+  outline: none;
+  border-color: rgba(255,255,255,.55);
+  box-shadow:
+    0 0 0 3px rgba(255,255,255,.08),
+    0 14px 40px rgba(0,0,0,.30);
+  background: rgba(255,255,255,.20);
+}
+
+/* botones “píldora” oscuros sobre glass */
+.btn-black{
+  background: #0b0f14;
+  color:#fff;
+  border:1px solid rgba(255,255,255,.18);
+  border-radius: 9999px;
+}
+.btn-black:hover{ background:#0c1218; }
+
+/* chips/contadores suaves en tablas/listas */
+.badge-soft{
+  background: rgba(255,255,255,.10);
+  border:1px solid rgba(255,255,255,.22);
+  color:#fff;
+  border-radius: 9999px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+/* =========================
+   ADDITIONS: Liquid surfaces & soft button
+   ========================= */
+
+/* 1) Tarjeta de vidrio suave para features (LiquidFeature) */
+@layer utilities {
+  .liquid-surface {
+    @apply rounded-2xl border border-white/15 bg-white/10 backdrop-blur-xl;
+    /* sombra suave y agradable en fondos oscuros */
+    box-shadow: 0 15px 50px -25px rgba(0,0,0,.60);
+  }
+
+  /* 2) Overlay de brillo para el panel del hero (no sustituye tu .liquid-panel) */
+  .liquid-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    /* dos halos radiales muy sutiles */
+    background:
+      radial-gradient(1200px 400px at 30% -10%, rgba(167,139,250,.12), transparent 60%),
+      radial-gradient(900px 500px at 100% 10%, rgba(110,231,183,.10), transparent 55%);
+  }
+
+  /* 3) Botón suave reutilizable para CTAs secundarios */
+  .btn-soft {
+    @apply inline-flex items-center justify-center rounded-full px-4 py-2 text-sm transition;
+    @apply border border-white/20 bg-white/10 hover:bg-white/20;
   }
 }
